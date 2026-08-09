@@ -5,76 +5,256 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>国内信用证融资成本计算器</title>
 <style>
-  :root { --bg:#f5f6f8; --card:#fff; --primary:#1a73e8; --text:#202124; --text-secondary:#5f6368; --border:#dadce0; --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08); }
+  :root { --bg:#f5f6f8; --card:#fff; --primary:#1a73e8; --text:#202124; --text-secondary:#5f6368; --border:#dadce0; --radius:12px; --shadow:0 1px 3px rgba(0,0,0,.08); --green:#0d904f; --red:#d93025; }
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; max-width:100%; overflow-x:hidden; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; line-height:1.5; }
   .app { max-width:600px; margin:0 auto; padding:16px 12px 30px; }
+
   .header { text-align:center; margin-bottom:20px; }
   .header h1 { font-size:22px; font-weight:700; }
   .header p { font-size:12px; color:var(--text-secondary); margin-top:4px; }
+
   .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--border); margin-bottom:14px; }
   .card-header { padding:12px 16px; border-bottom:1px solid var(--border); font-size:14px; font-weight:600; border-top:3px solid var(--primary); }
   .card-body { padding:16px; }
+
   .form-group { margin-bottom:12px; }
   .form-label { font-size:12px; color:var(--text-secondary); margin-bottom:4px; }
   .input-row { display:flex; align-items:center; background:#f8f9fa; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-  .input-row span { padding:0 10px; font-size:12px; color:var(--text-secondary); }
-  .input-row input { flex:1; border:none; background:transparent; padding:12px; font-size:16px; outline:none; text-align:right; width:100%; }
-  .btn { width:100%; padding:14px; border:none; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer; margin-top:8px; }
-  .btn-primary { background:var(--primary); color:#fff; -webkit-appearance:none; }
+  .input-row span { padding:0 10px; font-size:12px; color:var(--text-secondary); white-space:nowrap; }
+  .input-row input { flex:1; border:none; background:transparent; padding:12px; font-size:16px; outline:none; text-align:right; width:100%; min-width:0; }
+  .input-row select { flex:1; border:none; background:transparent; padding:12px; font-size:16px; outline:none; }
+  .input-row input[type="date"] { text-align:left; }
+
+  .btn { padding:14px; border:none; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer; -webkit-appearance:none; }
+  .btn-primary { width:100%; background:var(--primary); color:#fff; margin-top:8px; }
   .btn-primary:active { opacity:.8; }
+  .btn-row { display:flex; gap:8px; margin-top:8px; }
+  .btn-row .btn { flex:1; }
+  .btn-secondary { background:#f0f0f0; color:var(--text); }
+  .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); }
+
+  .radio-group { display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:4px; }
+  .radio-group label { flex:1; text-align:center; padding:10px 4px; font-size:13px; cursor:pointer; background:#f8f9fa; color:var(--text-secondary); transition:.15s; }
+  .radio-group label.active { background:var(--primary); color:#fff; font-weight:600; }
+  .radio-group input[type="radio"] { display:none; }
+
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .toggle-label { font-size:13px; color:var(--text-secondary); }
+  .toggle-switch { position:relative; width:44px; height:24px; }
+  .toggle-switch input { display:none; }
+  .toggle-switch .slider { position:absolute; cursor:pointer; top:0;left:0;right:0;bottom:0; background:#ccc; border-radius:24px; transition:.2s; }
+  .toggle-switch .slider:before { content:''; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.2s; }
+  .toggle-switch input:checked+.slider { background:var(--primary); }
+  .toggle-switch input:checked+.slider:before { transform:translateX(20px); }
+
+  #result-area { margin-top:16px; }
+
   .metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
   .metric { background:#f8f9fa; border-radius:8px; padding:14px 12px; text-align:center; }
   .metric .label { font-size:11px; color:var(--text-secondary); }
   .metric .value { font-size:22px; font-weight:700; margin-top:4px; }
   .metric .value.pct { color:var(--primary); }
+
   .detail-row { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; border-bottom:1px solid #f0f0f0; }
   .detail-row:last-child { border-bottom:none; font-weight:700; font-size:14px; }
+  .detail-row .neg { color:var(--green); }
+
   .verdict { padding:14px; border-radius:8px; font-size:14px; font-weight:600; text-align:center; margin-top:12px; background:#e8f0fe; color:var(--primary); }
-  .verdict.loan { background:#e6f4ea; color:#0d904f; }
-  #result-area { margin-top:16px; }
+  .verdict.loan { background:#e6f4ea; color:var(--green); }
+
+  .collapsible { border:1px solid var(--border); border-radius:var(--radius); margin-bottom:12px; overflow:hidden; }
+  .collapsible-header { padding:12px 16px; background:#f8f9fa; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:14px; font-weight:600; user-select:none; }
+  .collapsible-header .arrow { transition:.2s; font-size:11px; color:var(--text-secondary); }
+  .collapsible.open .collapsible-header .arrow { transform:rotate(180deg); }
+  .collapsible-body { display:none; padding:12px 16px; }
+  .collapsible.open .collapsible-body { display:block; }
+
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  table th,table td { padding:8px 6px; text-align:center; border-bottom:1px solid #f0f0f0; }
+  table th { background:#f8f9fa; font-weight:600; color:var(--text-secondary); font-size:11px; }
+  table td { font-size:12px; }
+  table .col-l { text-align:left; }
+  table .col-r { text-align:right; }
+  .row-lc { background:#e8f0fe; }
+  .row-loan { background:#e6f4ea; }
+
+  .rate-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .rate-chip { padding:4px 10px; border-radius:14px; font-size:12px; background:#f0f0f0; cursor:pointer; border:1px solid transparent; transition:.15s; }
+  .rate-chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .quick-bar { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--primary); color:#fff; border-radius:var(--radius); margin-bottom:12px; font-size:13px; }
+  .quick-bar .qb-val { font-weight:700; font-size:18px; }
+
+  .popup-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%; background:rgba(0,0,0,.5); z-index:9999; justify-content:center; align-items:center; }
+  .popup-overlay.show { display:flex; }
+  .popup { background:#fff; border-radius:var(--radius); max-width:90vw; max-height:85vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,.15); }
+  .popup img { width:100%; display:block; }
+  .popup-actions { padding:12px; display:flex; gap:8px; }
+  .popup-actions .btn { flex:1; }
+
+  .loading-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%; background:rgba(255,255,255,.85); z-index:10000; justify-content:center; align-items:center; flex-direction:column; }
+  .loading-overlay.show { display:flex; }
+  .loading-spinner { width:36px;height:36px; border:3px solid #ddd; border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-text { font-size:13px; color:var(--text-secondary); }
+
+  .inline-group { display:flex; gap:8px; align-items:center; }
+  .inline-group>div { flex:1; }
+
   hr { border:none; border-top:1px solid var(--border); margin:14px 0; }
+
+  @media(min-width:769px) {
+    .app { max-width:900px; }
+    .layout { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
+    #input-card { position:sticky; top:16px; }
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="header">
     <h1>国内信用证融资成本计算器</h1>
-    <p>手机专用版</p>
+    <p>综合融资成本对比分析</p>
   </div>
 
-  <div class="card">
-    <div class="card-header">参数设置</div>
-    <div class="card-body">
-      <div class="form-group">
-        <div class="form-label">开证金额</div>
-        <div class="input-row"><span>¥</span><input id="amount" type="text" value="14290000"></div>
+  <div class="layout">
+    <div id="input-card">
+      <div class="card">
+        <div class="card-header">参数设置</div>
+        <div class="card-body">
+          <div class="form-group">
+            <div class="form-label">开证金额</div>
+            <div class="input-row"><span>¥</span><input id="amount" type="text" value="14290000"></div>
+          </div>
+          <div class="form-group">
+            <div class="form-label">保证金比例</div>
+            <div class="input-row"><input id="depositRatio" type="text" value="30"><span>%</span></div>
+          </div>
+          <div class="form-group">
+            <div class="form-label">承兑费率（年化 %）</div>
+            <div class="input-row"><input id="acceptanceFee" type="text" value="1.20"><span>%</span></div>
+          </div>
+          <hr>
+          <div class="form-group">
+            <div class="form-label">期限模式</div>
+            <div class="radio-group" id="dateModeGroup">
+              <label class="active" onclick="toggleDateMode('months')"><input type="radio" name="dateMode" value="months" checked>按月份</label>
+              <label onclick="toggleDateMode('dates')"><input type="radio" name="dateMode" value="dates">按日期</label>
+            </div>
+          </div>
+          <div id="monthsInputs">
+            <div class="form-group">
+              <div class="form-label">期限（月）</div>
+              <div class="input-row"><input id="termMonths" type="text" value="6"><span>个月</span></div>
+            </div>
+          </div>
+          <div id="datesInputs" style="display:none;">
+            <div class="form-group">
+              <div class="form-label">起始日期</div>
+              <div class="input-row"><input id="startDate" type="date" value="2026-08-09" onchange="syncDates()"></div>
+            </div>
+            <div class="form-group">
+              <div class="form-label">到期日期</div>
+              <div class="input-row"><input id="endDate" type="date" value="2027-02-09" onchange="syncDatesFromMonths()"></div>
+            </div>
+          </div>
+          <hr>
+          <div class="form-group">
+            <div class="form-label">贴现利率（年化 %）</div>
+            <div class="input-row"><input id="discountRate" type="text" value="1.50"><span>%</span></div>
+          </div>
+          <div class="form-group">
+            <div class="form-label">流贷利率（年化 %）</div>
+            <div class="input-row"><input id="loanRate" type="text" value="2.11"><span>%</span></div>
+          </div>
+          <hr>
+          <div class="toggle-row">
+            <span class="toggle-label">理财利率对比</span>
+            <label class="toggle-switch"><input type="checkbox" id="wealthToggle" onchange="switchCostDetail()"><span class="slider"></span></label>
+          </div>
+          <div id="wealthSection" style="display:none;">
+            <div class="form-group">
+              <div class="form-label">理财基数</div>
+              <div class="radio-group" id="wealthBaseGroup">
+                <label class="active" onclick="setWealthBase('amount')"><input type="radio" name="wealthBase" value="amount" checked>开证金额</label>
+                <label onclick="setWealthBase('exposure')"><input type="radio" name="wealthBase" value="exposure">融资敞口</label>
+              </div>
+            </div>
+            <div id="wealthRates">
+              <div class="form-label" style="margin-bottom:6px;">理财利率（年化 %）</div>
+              <div class="rate-chips" id="wealthRateChips">
+                <span class="rate-chip active" onclick="setWealthRate(1.50)">1.50%</span>
+                <span class="rate-chip" onclick="setWealthRate(1.80)">1.80%</span>
+                <span class="rate-chip" onclick="setWealthRate(2.00)">2.00%</span>
+                <span class="rate-chip" onclick="setWealthRate(2.50)">2.50%</span>
+                <span class="rate-chip" onclick="setWealthRate(3.00)">3.00%</span>
+              </div>
+              <div class="input-row" style="margin-top:6px;"><input id="wealthRate" type="text" value="1.50"><span>%</span></div>
+            </div>
+          </div>
+          <hr>
+          <div class="toggle-row">
+            <span class="toggle-label">资金周转明细</span>
+            <label class="toggle-switch"><input type="checkbox" id="turnoverToggle"><span class="slider"></span></label>
+          </div>
+          <div id="turnoverSection" style="display:none;">
+            <div class="form-group">
+              <div class="form-label">收款方付款期限（天）</div>
+              <div class="input-row"><input id="payDays" type="text" value="30"><span>天</span></div>
+            </div>
+            <div class="form-group">
+              <div class="form-label">贴现到账天数</div>
+              <div class="input-row"><input id="discountDays" type="text" value="3"><span>天</span></div>
+            </div>
+            <div class="form-group">
+              <div class="form-label">流贷到账天数</div>
+              <div class="input-row"><input id="loanDays" type="text" value="7"><span>天</span></div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="calculate()">计算</button>
+          <div class="btn-row">
+            <button class="btn btn-secondary" onclick="resetForm()">恢复默认</button>
+            <button class="btn btn-outline" onclick="generatePoster()">生成海报</button>
+            <button class="btn btn-outline" onclick="copyShare()">复制分享</button>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <div class="form-label">保证金比例</div>
-        <div class="input-row"><input id="depositRatio" type="text" value="30"><span>%</span></div>
-      </div>
-      <div class="form-group">
-        <div class="form-label">期限（月）</div>
-        <div class="input-row"><input id="termMonths" type="text" value="6"><span>个月</span></div>
-      </div>
-      <div class="form-group">
-        <div class="form-label">贴现利率（年化 %）</div>
-        <div class="input-row"><input id="discountRate" type="text" value="1.50"><span>%</span></div>
-      </div>
-      <hr>
-      <div class="form-group">
-        <div class="form-label">流贷利率（年化 %）</div>
-        <div class="input-row"><input id="loanRate" type="text" value="2.11"><span>%</span></div>
-      </div>
-      <button class="btn btn-primary" id="calcBtn">计算</button>
+    </div>
+
+    <div>
+      <div id="result-area"></div>
     </div>
   </div>
+</div>
 
-  <div id="result-area"></div>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">正在生成海报...</div>
+</div>
+
+<div class="popup-overlay" id="posterPopup" onclick="closePoster(event)">
+  <div class="popup" onclick="event.stopPropagation()">
+    <img id="posterImage" src="" alt="计算结果海报">
+    <div class="popup-actions">
+      <button class="btn btn-secondary" onclick="closePoster()">关闭</button>
+      <button class="btn btn-primary" onclick="savePoster()">保存图片</button>
+    </div>
+  </div>
 </div>
 
 <script>
+// ===== DEFAULTS =====
+var DEFAULTS = {
+  amount:'14290000', depositRatio:'30', acceptanceFee:'1.20',
+  termMonths:'6', startDate:'2026-08-09', endDate:'2027-02-09',
+  discountRate:'1.50', loanRate:'2.11',
+  wealthRate:'1.50', wealthBase:'amount',
+  payDays:'30', discountDays:'3', loanDays:'7',
+  dateMode:'months'
+};
+
+// ===== UTILS =====
 function getVal(id) {
   var el = document.getElementById(id);
   return el ? el.value : '';
@@ -93,21 +273,27 @@ function fmtPct(v) {
   return ((v || 0) * 100).toFixed(4) + '%';
 }
 
-function calculate() {
-  var amount = parseNum(getVal('amount'));
-  var depositRatio = parseNum(getVal('depositRatio')) / 100;
+function fmtInt(v) {
+  return Math.round(v || 0).toLocaleString('zh-CN');
+}
+
+// ===== COMPUTE =====
+function computeLC(params) {
+  var amount = params.amount;
+  var depositRatio = params.depositRatio;
   var deposit = Math.round(amount * depositRatio);
   var exposure = amount - deposit;
-  var termMonths = parseInt(getVal('termMonths'), 10) || 6;
-  var days = termMonths * 30;
-  var discountRate = parseNum(getVal('discountRate')) / 100;
-  var loanRate = parseNum(getVal('loanRate')) / 100;
+  var days = params.days;
+  var discountRate = params.discountRate;
+  var loanRate = params.loanRate;
+  var acceptanceFeeRate = params.acceptanceFeeRate;
+  var wealthRate = params.wealthRate;
+  var wealthBase = params.wealthBase;
   var dayFraction = days / 360;
 
   var discountInterest = Math.round(discountRate * amount * dayFraction * 100) / 100;
-  var feeRate = 0.0012;
-  var issuanceFee = Math.round(feeRate * amount * 100) / 100;
-  var feeSubtotal = discountInterest + issuanceFee;
+  var acceptanceFee = Math.round(acceptanceFeeRate * amount * dayFraction * 100) / 100;
+  var feeSubtotal = discountInterest + acceptanceFee;
   var depositIntRate = 0.012;
   var depositInterest = Math.round(depositIntRate * deposit * dayFraction * 100) / 100;
   var totalCost = feeSubtotal - depositInterest;
@@ -115,36 +301,462 @@ function calculate() {
   var loanTotalCost = Math.round(exposure * loanRate * dayFraction * 100) / 100;
   var diff = loanTotalCost - totalCost;
 
+  var wealthPrincipal = (wealthBase === 'amount') ? amount : exposure;
+  var wealthIncomeGross = Math.round(wealthRate * wealthPrincipal * dayFraction * 100) / 100;
+  var wealthCost = Math.round(wealthRate * exposure * dayFraction * 100) / 100;
+  var netAfterWealth = totalCost - wealthIncomeGross;
+
+  var sensitivity = [];
+  var rates = [1.0, 1.2, 1.4, 1.5, 1.6, 1.8, 2.0, 2.5, 3.0];
+  for (var i = 0; i < rates.length; i++) {
+    var r = rates[i] / 100;
+    var discInt = Math.round(r * amount * dayFraction * 100) / 100;
+    var feeSub = discInt + acceptanceFee;
+    var totalC = feeSub - depositInterest;
+    var loanC = Math.round(exposure * loanRate * dayFraction * 100) / 100;
+    var d = loanC - totalC;
+    var annR = (exposure > 0 && days > 0) ? (totalC / exposure / days * 360) : 0;
+    var wealthInc = Math.round(wealthRate * wealthPrincipal * dayFraction * 100) / 100;
+    sensitivity.push({
+      rate: r, discountInterest: discInt, totalCost: totalC,
+      loanCost: loanC, diff: d, annualRate: annR,
+      netAfterWealth: totalC - wealthInc
+    });
+  }
+
+  var turnoverRows = [];
+  var payDays = params.payDays || 30;
+  var discountDays = params.discountDays || 3;
+  var loanDays = params.loanDays || 7;
+  var netDays = days - payDays;
+  var lcTurnoverDays = netDays;
+  var loanTurnoverDays = netDays + loanDays - discountDays;
+
+  if (params.showTurnover) {
+    turnoverRows.push({ label:'开证到收款方付款', lcDays:payDays, loanDays:payDays, lcNote:'收款方收票后付款周期', loanNote:'收款方收票后付款周期' });
+    turnoverRows.push({ label:'资金占用期（净）', lcDays:lcTurnoverDays, loanDays:lcTurnoverDays, lcNote:'', loanNote:'' });
+    turnoverRows.push({ label:'贴现到账', lcDays:discountDays, loanDays:0, lcNote:'实际到账延迟', loanNote:'' });
+    turnoverRows.push({ label:'流贷审批放款', lcDays:0, loanDays:loanDays, lcNote:'', loanNote:'审批+放款延迟' });
+    turnoverRows.push({ label:'实际资金占用总天数', lcDays:payDays + discountDays, loanDays:payDays + loanDays, lcNote:'', loanNote:'' });
+  }
+
+  return {
+    amount:amount, deposit:deposit, exposure:exposure, days:days,
+    discountInterest:discountInterest, acceptanceFee:acceptanceFee,
+    feeSubtotal:feeSubtotal, depositInterest:depositInterest,
+    totalCost:totalCost, annualRate:annualRate,
+    loanTotalCost:loanTotalCost, diff:diff,
+    wealthPrincipal:wealthPrincipal, wealthIncomeGross:wealthIncomeGross,
+    wealthCost:wealthCost, netAfterWealth:netAfterWealth,
+    sensitivity:sensitivity, turnoverRows:turnoverRows,
+    discountRate:discountRate, loanRate:loanRate, wealthRate:wealthRate,
+    wealthBase:wealthBase, acceptanceFeeRate:acceptanceFeeRate
+  };
+}
+
+// ===== RENDER =====
+function renderResult(r) {
+  var showWealth = document.getElementById('wealthToggle').checked;
+  var showTurnover = document.getElementById('turnoverToggle').checked;
   var html = '';
+
+  // Quick bar
+  html += '<div class="quick-bar">';
+  html += '<span>年化成本率</span><span class="qb-val">' + fmtPct(r.annualRate) + '</span>';
+  if (showWealth) {
+    var netAnnual = r.exposure > 0 && r.days > 0 ? (r.netAfterWealth / r.exposure / r.days * 360) : 0;
+    html += '<span>扣除理财</span><span class="qb-val">' + fmtPct(netAnnual) + '</span>';
+  }
+  html += '</div>';
+
+  // Metric grid
   html += '<div class="card"><div class="card-body">';
   html += '<div class="metric-grid">';
-  html += '<div class="metric"><div class="label">融资敞口</div><div class="value">¥' + fmt(exposure) + '</div></div>';
-  html += '<div class="metric"><div class="label">年化成本率</div><div class="value pct">' + fmtPct(annualRate) + '</div></div>';
-  html += '<div class="metric"><div class="label">信用证总成本</div><div class="value">¥' + fmt(totalCost) + '</div></div>';
-  html += '<div class="metric"><div class="label">流贷总成本</div><div class="value">¥' + fmt(loanTotalCost) + '</div></div>';
+  html += '<div class="metric"><div class="label">融资敞口</div><div class="value">¥' + fmt(r.exposure) + '</div></div>';
+  html += '<div class="metric"><div class="label">年化成本率</div><div class="value pct">' + fmtPct(r.annualRate) + '</div></div>';
+  html += '<div class="metric"><div class="label">信用证总成本</div><div class="value">¥' + fmt(r.totalCost) + '</div></div>';
+  html += '<div class="metric"><div class="label">流贷总成本</div><div class="value">¥' + fmt(r.loanTotalCost) + '</div></div>';
   html += '</div>';
-  html += '<div class="detail-row"><span>① 福费廷贴现利息</span><span>¥' + fmt(discountInterest) + '</span></div>';
-  html += '<div class="detail-row"><span>② 开证手续费 (0.12%)</span><span>¥' + fmt(issuanceFee) + '</span></div>';
-  html += '<div class="detail-row"><span>③ 保证金存款利息 (1.20%)</span><span>−¥' + fmt(depositInterest) + '</span></div>';
-  html += '<div class="detail-row"><span>融资总成本</span><span>¥' + fmt(totalCost) + '</span></div>';
   html += '</div></div>';
 
-  var verdictClass = diff > 0 ? '' : ' loan';
-  var verdictText = diff > 0 ? '国内信用证更优，节省 ¥' + fmt(diff) : '流动资金贷款更优，节省 ¥' + fmt(-diff);
+  // Cost detail card
+  html += '<div class="card"><div class="card-body">';
+  html += '<div class="detail-row"><span>贴现利息 (' + fmtPct(r.discountRate) + ')</span><span>¥' + fmt(r.discountInterest) + '</span></div>';
+  html += '<div class="detail-row"><span>承兑费 (' + fmtPct(r.acceptanceFeeRate) + ')</span><span>¥' + fmt(r.acceptanceFee) + '</span></div>';
+  html += '<div class="detail-row"><span>保证金存款利息 (1.20%)</span><span class="neg">-¥' + fmt(r.depositInterest) + '</span></div>';
+  html += '<div class="detail-row"><span>信用证融资总成本</span><span>¥' + fmt(r.totalCost) + '</span></div>';
+  if (showWealth) {
+    html += '<div class="detail-row"><span>理财收益 (' + fmtPct(r.wealthRate) + ', 基数:' + (r.wealthBase==='amount'?'开证金额':'融资敞口') + ')</span><span class="neg">-¥' + fmt(r.wealthIncomeGross) + '</span></div>';
+    html += '<div class="detail-row"><span>扣除理财后净成本</span><span>¥' + fmt(r.netAfterWealth) + '</span></div>';
+  }
+  html += '<div class="detail-row"><span>流贷总成本 (' + fmtPct(r.loanRate) + ')</span><span>¥' + fmt(r.loanTotalCost) + '</span></div>';
+  if (r.diff > 0) {
+    html += '<div class="detail-row"><span>信用证节省</span><span class="neg">¥' + fmt(r.diff) + '</span></div>';
+  } else {
+    html += '<div class="detail-row"><span>流贷节省</span><span style="color:var(--red);">¥' + fmt(-r.diff) + '</span></div>';
+  }
+  html += '</div></div>';
+
+  // Verdict bar
+  var verdictClass = r.diff > 0 ? '' : ' loan';
+  var verdictText = r.diff > 0 ? '国内信用证更优，节省 ¥' + fmt(r.diff) : '流动资金贷款更优，节省 ¥' + fmt(-r.diff);
+  if (showWealth && r.netAfterWealth < r.loanTotalCost) {
+    verdictClass = '';
+    verdictText = '扣除理财收益后，信用证净成本 ¥' + fmt(r.netAfterWealth) + ' 仍优于流贷 ¥' + fmt(r.loanTotalCost);
+  }
   html += '<div class="verdict' + verdictClass + '">' + verdictText + '</div>';
+
+  // Wealth detail card
+  if (showWealth) {
+    html += '<div class="card" style="margin-top:12px;"><div class="card-header">理财收益明细</div><div class="card-body">';
+    html += '<div class="detail-row"><span>理财基数</span><span>' + (r.wealthBase==='amount'?'开证金额':'融资敞口') + ' ¥' + fmt(r.wealthPrincipal) + '</span></div>';
+    html += '<div class="detail-row"><span>理财年化利率</span><span>' + fmtPct(r.wealthRate) + '</span></div>';
+    html += '<div class="detail-row"><span>计息天数</span><span>' + r.days + ' 天</span></div>';
+    html += '<div class="detail-row"><span>理财收益</span><span>¥' + fmt(r.wealthIncomeGross) + '</span></div>';
+    html += '<div class="detail-row"><span>融资资金成本</span><span>¥' + fmt(r.wealthCost) + '</span></div>';
+    html += '</div></div>';
+  }
+
+  // Sensitivity analysis (collapsible)
+  html += '<div class="collapsible open" id="sensitivityCard">';
+  html += '<div class="collapsible-header" onclick="toggleCollapse(\'sensitivityCard\')"><span>贴现利率敏感性分析</span><span class="arrow">&#9660;</span></div>';
+  html += '<div class="collapsible-body"><table><thead><tr>';
+  html += '<th>贴现利率</th><th>贴现利息</th><th>信用证总成本</th><th>流贷成本</th><th>差额</th><th>年化成本率</th>';
+  if (showWealth) html += '<th>扣除理财</th>';
+  html += '<th>结论</th></tr></thead><tbody>';
+  for (var i = 0; i < r.sensitivity.length; i++) {
+    var s = r.sensitivity[i];
+    var cls = s.diff > 0 ? 'row-lc' : 'row-loan';
+    var verdict = s.diff > 0 ? '信用证优' : '贷款优';
+    html += '<tr class="' + cls + '"><td>' + fmtPct(s.rate) + '</td>';
+    html += '<td class="col-r">¥' + fmt(s.discountInterest) + '</td>';
+    html += '<td class="col-r">¥' + fmt(s.totalCost) + '</td>';
+    html += '<td class="col-r">¥' + fmt(s.loanCost) + '</td>';
+    html += '<td class="col-r">¥' + fmt(Math.abs(s.diff)) + '</td>';
+    html += '<td>' + fmtPct(s.annualRate) + '</td>';
+    if (showWealth) html += '<td class="col-r">¥' + fmt(s.netAfterWealth) + '</td>';
+    html += '<td>' + verdict + '</td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+
+  // Turnover detail (collapsible)
+  if (showTurnover && r.turnoverRows.length > 0) {
+    html += '<div class="collapsible" id="turnoverCard">';
+    html += '<div class="collapsible-header" onclick="toggleCollapse(\'turnoverCard\')"><span>资金周转明细</span><span class="arrow">&#9660;</span></div>';
+    html += '<div class="collapsible-body"><table><thead><tr><th class="col-l">环节</th><th>信用证(天)</th><th>流贷(天)</th><th>说明</th></tr></thead><tbody>';
+    for (var j = 0; j < r.turnoverRows.length; j++) {
+      var tr = r.turnoverRows[j];
+      html += '<tr><td class="col-l">' + tr.label + '</td><td>' + tr.lcDays + '</td><td>' + tr.loanDays + '</td><td style="font-size:11px;color:var(--text-secondary)">' + (tr.lcNote || '') + '</td></tr>';
+    }
+    html += '</tbody></table></div></div>';
+  }
 
   var resArea = document.getElementById('result-area');
   if (resArea) {
-    resArea.innerHTML = html;
+    resArea.innerHTML = '<div id="result-content">' + html + '</div>';
     try { resArea.scrollIntoView({behavior:'smooth',block:'start'}); } catch(e) {}
   }
 }
 
-// Bind button click
-document.getElementById('calcBtn').addEventListener('click', calculate);
+// ===== CALCULATE =====
+function calculate() {
+  var amount = parseNum(getVal('amount'));
+  var depositRatio = parseNum(getVal('depositRatio')) / 100;
+  var acceptanceFeeRate = parseNum(getVal('acceptanceFee')) / 100;
+  var discountRate = parseNum(getVal('discountRate')) / 100;
+  var loanRate = parseNum(getVal('loanRate')) / 100;
+  var wealthRate = parseNum(getVal('wealthRate')) / 100;
+  var payDays = parseInt(getVal('payDays'), 10) || 30;
+  var discountDays = parseInt(getVal('discountDays'), 10) || 3;
+  var loanDays = parseInt(getVal('loanDays'), 10) || 7;
 
-// Auto calculate on load
-calculate();
+  var dateMode = document.querySelector('input[name="dateMode"]:checked');
+  var mode = dateMode ? dateMode.value : 'months';
+  var days;
+  if (mode === 'dates') {
+    var startDate = getVal('startDate');
+    var endDate = getVal('endDate');
+    if (startDate && endDate) {
+      var start = new Date(startDate);
+      var end = new Date(endDate);
+      days = Math.round((end - start) / (1000 * 60 * 60 * 24));
+      if (days <= 0) days = 180;
+    } else {
+      days = 180;
+    }
+  } else {
+    days = (parseInt(getVal('termMonths'), 10) || 6) * 30;
+  }
+
+  var wealthBase = document.querySelector('input[name="wealthBase"]:checked');
+  var wb = wealthBase ? wealthBase.value : 'amount';
+
+  var showTurnover = document.getElementById('turnoverToggle').checked;
+
+  var params = {
+    amount:amount, depositRatio:depositRatio,
+    acceptanceFeeRate:acceptanceFeeRate,
+    days:days, discountRate:discountRate, loanRate:loanRate,
+    wealthRate:wealthRate, wealthBase:wb,
+    payDays:payDays, discountDays:discountDays, loanDays:loanDays,
+    showTurnover:showTurnover
+  };
+
+  var result = computeLC(params);
+  renderResult(result);
+}
+
+// ===== DATE MODE =====
+function toggleDateMode(mode) {
+  var labels = document.querySelectorAll('#dateModeGroup label');
+  for (var i = 0; i < labels.length; i++) { labels[i].classList.remove('active'); }
+  var radio = document.querySelector('input[name="dateMode"][value="' + mode + '"]');
+  if (radio) {
+    radio.checked = true;
+    radio.parentElement.classList.add('active');
+  }
+  document.getElementById('monthsInputs').style.display = mode === 'months' ? '' : 'none';
+  document.getElementById('datesInputs').style.display = mode === 'dates' ? '' : 'none';
+  if (mode === 'months') { syncDates(); }
+  else { syncDatesFromMonths(); }
+}
+
+function syncDates() {
+  var months = parseInt(getVal('termMonths'), 10) || 6;
+  var startDate = getVal('startDate') || DEFAULTS.startDate;
+  var start = new Date(startDate);
+  var end = new Date(start);
+  end.setMonth(end.getMonth() + months);
+  var yyyy = end.getFullYear();
+  var mm = ('0' + (end.getMonth() + 1)).slice(-2);
+  var dd = ('0' + end.getDate()).slice(-2);
+  document.getElementById('endDate').value = yyyy + '-' + mm + '-' + dd;
+}
+
+function syncDatesFromMonths() {
+  var startDate = getVal('startDate');
+  var endDate = getVal('endDate');
+  if (startDate && endDate) {
+    var start = new Date(startDate);
+    var end = new Date(endDate);
+    var diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    var months = Math.round(diffDays / 30);
+    if (months < 1) months = 1;
+    document.getElementById('termMonths').value = String(months);
+  }
+}
+
+// ===== WEALTH BASE =====
+function setWealthBase(base) {
+  var labels = document.querySelectorAll('#wealthBaseGroup label');
+  for (var i = 0; i < labels.length; i++) { labels[i].classList.remove('active'); }
+  var radio = document.querySelector('input[name="wealthBase"][value="' + base + '"]');
+  if (radio) {
+    radio.checked = true;
+    radio.parentElement.classList.add('active');
+  }
+  calculate();
+}
+
+// ===== WEALTH RATE =====
+function setWealthRate(rate) {
+  document.getElementById('wealthRate').value = String(rate);
+  var chips = document.querySelectorAll('#wealthRateChips .rate-chip');
+  for (var i = 0; i < chips.length; i++) { chips[i].classList.remove('active'); }
+  var rateStr = rate.toFixed(2);
+  for (var j = 0; j < chips.length; j++) {
+    if (chips[j].textContent.indexOf(rateStr + '%') >= 0) { chips[j].classList.add('active'); break; }
+  }
+  calculate();
+}
+
+// ===== WEALTH TOGGLE =====
+function switchCostDetail() {
+  var checked = document.getElementById('wealthToggle').checked;
+  document.getElementById('wealthSection').style.display = checked ? '' : 'none';
+  calculate();
+}
+
+// ===== TURNOVER TOGGLE =====
+function toggleTurnoverSection() {
+  var checked = document.getElementById('turnoverToggle').checked;
+  document.getElementById('turnoverSection').style.display = checked ? '' : 'none';
+  calculate();
+}
+
+// ===== COLLAPSE =====
+function toggleCollapse(id) {
+  var el = document.getElementById(id);
+  if (el) {
+    if (el.classList.contains('open')) { el.classList.remove('open'); }
+    else { el.classList.add('open'); }
+  }
+}
+
+// ===== RESET =====
+function resetForm() {
+  document.getElementById('amount').value = DEFAULTS.amount;
+  document.getElementById('depositRatio').value = DEFAULTS.depositRatio;
+  document.getElementById('acceptanceFee').value = DEFAULTS.acceptanceFee;
+  document.getElementById('termMonths').value = DEFAULTS.termMonths;
+  document.getElementById('startDate').value = DEFAULTS.startDate;
+  document.getElementById('endDate').value = DEFAULTS.endDate;
+  document.getElementById('discountRate').value = DEFAULTS.discountRate;
+  document.getElementById('loanRate').value = DEFAULTS.loanRate;
+  document.getElementById('wealthRate').value = DEFAULTS.wealthRate;
+  document.getElementById('payDays').value = DEFAULTS.payDays;
+  document.getElementById('discountDays').value = DEFAULTS.discountDays;
+  document.getElementById('loanDays').value = DEFAULTS.loanDays;
+
+  document.getElementById('wealthToggle').checked = false;
+  document.getElementById('wealthSection').style.display = 'none';
+  document.getElementById('turnoverToggle').checked = false;
+  document.getElementById('turnoverSection').style.display = 'none';
+  toggleDateMode(DEFAULTS.dateMode);
+  setWealthBase(DEFAULTS.wealthBase);
+  setWealthRate(1.50);
+
+  var resArea = document.getElementById('result-area');
+  if (resArea) { resArea.innerHTML = ''; }
+
+  calculate();
+}
+
+// ===== POSTER =====
+function generatePoster() {
+  var overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.add('show');
+
+  if (typeof html2canvas === 'undefined') {
+    var script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.onload = function() {
+      setTimeout(function() { doCapture(); }, 150);
+    };
+    script.onerror = function() {
+      if (overlay) overlay.classList.remove('show');
+      alert('海报生成失败：网络不可用，无法加载 html2canvas');
+    };
+    document.head.appendChild(script);
+  } else {
+    setTimeout(function() { doCapture(); }, 150);
+  }
+}
+
+function doCapture() {
+  var resArea = document.getElementById('result-area');
+  if (!resArea || !resArea.innerHTML) { alert('请先计算再生成海报'); return; }
+
+  var quickBar = resArea.querySelector('.quick-bar');
+  var btnRows = document.querySelectorAll('.btn-row');
+  var collapsibles = resArea.querySelectorAll('.collapsible');
+
+  if (quickBar) quickBar.style.borderRadius = '12px 12px 0 0';
+  for (var i = 0; i < btnRows.length; i++) { btnRows[i].style.display = 'none'; }
+  for (var j = 0; j < collapsibles.length; j++) { collapsibles[j].classList.add('open'); }
+
+  var titleBar = document.createElement('div');
+  titleBar.id = 'posterTitle';
+  titleBar.style.cssText = 'text-align:center;padding:16px;background:var(--primary);color:#fff;border-radius:12px 12px 0 0;font-size:18px;font-weight:700;';
+  titleBar.textContent = '国内信用证融资成本计算器';
+  resArea.insertBefore(titleBar, resArea.firstChild);
+
+  var footerBar = document.createElement('div');
+  footerBar.id = 'posterFooter';
+  footerBar.style.cssText = 'text-align:center;padding:12px;font-size:11px;color:var(--text-secondary);background:#f8f9fa;border-radius:0 0 12px 12px;';
+  footerBar.textContent = '数据仅供参考 · ' + new Date().toLocaleDateString('zh-CN');
+  resArea.appendChild(footerBar);
+
+  html2canvas(resArea, { backgroundColor:'#ffffff', scale:2, useCORS:true }).then(function(canvas) {
+    var imgData = canvas.toDataURL('image/png');
+    var popup = document.getElementById('posterPopup');
+    var img = document.getElementById('posterImage');
+    if (img) { img.src = imgData; img._fullData = imgData; }
+    if (popup) popup.classList.add('show');
+  }).catch(function(err) {
+    alert('海报生成失败：' + (err.message || '未知错误'));
+  }).finally(function() {
+    cleanupPosterDOM(titleBar, footerBar, quickBar, btnRows, collapsibles);
+  });
+}
+
+function cleanupPosterDOM(titleBar, footerBar, quickBar, btnRows, collapsibles) {
+  var overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.remove('show');
+  if (titleBar && titleBar.parentNode) titleBar.parentNode.removeChild(titleBar);
+  if (footerBar && footerBar.parentNode) footerBar.parentNode.removeChild(footerBar);
+  if (quickBar) quickBar.style.borderRadius = '';
+  for (var i = 0; i < btnRows.length; i++) { btnRows[i].style.display = ''; }
+  for (var j = 0; j < collapsibles.length; j++) { collapsibles[j].classList.remove('open'); }
+}
+
+function closePoster(e) {
+  if (e && e.target !== document.getElementById('posterPopup')) return;
+  var popup = document.getElementById('posterPopup');
+  if (popup) popup.classList.remove('show');
+}
+
+function savePoster() {
+  var img = document.getElementById('posterImage');
+  if (!img || !img._fullData) return;
+  var link = document.createElement('a');
+  link.download = '信用证融资成本_' + new Date().toISOString().slice(0,10) + '.png';
+  link.href = img._fullData;
+  link.click();
+}
+
+// ===== COPY SHARE =====
+function copyShare() {
+  var amount = parseNum(getVal('amount'));
+  var result = computeLC({
+    amount:amount,
+    depositRatio:parseNum(getVal('depositRatio'))/100,
+    acceptanceFeeRate:parseNum(getVal('acceptanceFee'))/100,
+    days:(parseInt(getVal('termMonths'),10)||6)*30,
+    discountRate:parseNum(getVal('discountRate'))/100,
+    loanRate:parseNum(getVal('loanRate'))/100,
+    wealthRate:parseNum(getVal('wealthRate'))/100,
+    wealthBase:'amount',
+    payDays:30, discountDays:3, loanDays:7,
+    showTurnover:false
+  });
+
+  var text = '【国内信用证融资成本计算器】\n';
+  text += '开证金额：¥' + fmt(result.amount) + '\n';
+  text += '信用证融资总成本：¥' + fmt(result.totalCost) + '\n';
+  text += '年化成本率：' + fmtPct(result.annualRate) + '\n';
+  text += '流贷总成本：¥' + fmt(result.loanTotalCost) + '\n';
+  text += (result.diff > 0 ? '结论：信用证更优，节省 ¥' + fmt(result.diff) : '结论：流贷更优，节省 ¥' + fmt(-result.diff));
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      alert('已复制到剪贴板');
+    }).catch(function() {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.cssText = 'position:fixed;left:-9999px;';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try { document.execCommand('copy'); alert('已复制到剪贴板'); }
+  catch(e) { alert('复制失败，请手动复制：\n' + text); }
+  document.body.removeChild(textarea);
+}
+
+// ===== TURNOVER TOGGLE BINDING =====
+document.getElementById('turnoverToggle').addEventListener('change', toggleTurnoverSection);
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', function() {
+  calculate();
+});
 </script>
 </body>
 </html>
