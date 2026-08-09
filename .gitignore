@@ -1,0 +1,5 @@
+node_modules/
+output/
+src/
+build-obfuscate.js
+package-lock.json

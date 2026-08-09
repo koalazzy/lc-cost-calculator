@@ -1,0 +1,13 @@
+{
+  "name": "lc-cost-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "国内信用证融资成本测算器 - 构建工具",
+  "scripts": {
+    "build:obfuscate": "node build-obfuscate.js",
+    "sync:icloud": "node sync-to-icloud.js"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.0"
+  }
+}
