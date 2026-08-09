@@ -133,7 +133,7 @@
           </div>
           <div class="form-group">
             <div class="form-label">承兑费率（年化 %）</div>
-            <div class="input-row"><input id="acceptanceFee" type="text" value="1.20"><span>%</span></div>
+            <div class="input-row"><input id="acceptanceFee" type="text" value="0.12"><span>%</span></div>
           </div>
           <hr>
           <div class="form-group">
@@ -246,7 +246,7 @@
 <script>
 // ===== DEFAULTS =====
 var DEFAULTS = {
-  amount:'14290000', depositRatio:'30', acceptanceFee:'1.20',
+  amount:'14290000', depositRatio:'30', acceptanceFee:'0.12',
   termMonths:'6', startDate:'2026-08-09', endDate:'2027-02-09',
   discountRate:'1.50', loanRate:'2.11',
   wealthRate:'1.50', wealthBase:'amount',
@@ -292,7 +292,7 @@ function computeLC(params) {
   var dayFraction = days / 360;
 
   var discountInterest = Math.round(discountRate * amount * dayFraction * 100) / 100;
-  var acceptanceFee = Math.round(acceptanceFeeRate * amount * dayFraction * 100) / 100;
+  var acceptanceFee = Math.round(acceptanceFeeRate * amount * 100) / 100;
   var feeSubtotal = discountInterest + acceptanceFee;
   var depositIntRate = 0.012;
   var depositInterest = Math.round(depositIntRate * deposit * dayFraction * 100) / 100;
