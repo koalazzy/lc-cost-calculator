@@ -3,3 +3,4 @@ output/
 src/
 build-obfuscate.js
 package-lock.json
+dist/
