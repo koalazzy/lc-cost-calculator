@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>怒 - Ikari Warriors (复刻版)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Courier New',monospace}
+#game-wrapper{position:relative}
+canvas{display:block;image-rendering:pixelated;border:3px solid #333}
+#ui-overlay{position:absolute;top:0;left:0;width:100%;pointer-events:none;display:flex;justify-content:space-between;padding:6px 12px}
+.ui-panel{background:rgba(0,0,0,0.75);border:2px solid #555;padding:4px 10px;color:#fff;font-size:13px;min-width:160px}
+.ui-panel .label{color:#888;font-size:10px}
+.ui-panel .bar-bg{background:#333;height:8px;margin:2px 0;border:1px solid #555}
+.ui-panel .bar-fill{height:100%;transition:width 0.15s}
+.bar-hp{background:#e74c3c}
+.bar-fuel{background:#f39c12}
+.ui-p1{color:#4fc3f7}
+.ui-p2{color:#ff8a65}
+#ui-center{text-align:center;color:#fff;font-size:11px}
+#ui-center .score{font-size:20px;font-weight:bold;color:#ffd54f}
+#msg-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff0;font-size:28px;font-weight:bold;text-align:center;pointer-events:none;text-shadow:2px 2px 0 #000;display:none}
+#msg-overlay.show{display:block}
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+<canvas id="game"></canvas>
+<div id="ui-overlay">
+<div class="ui-panel ui-p1"><div class="label">P1 战士</div>HP<div class="bar-bg"><div id="p1-hp-bar" class="bar-fill bar-hp" style="width:100%"></div></div>手雷:<span id="p1-nade">5</span> | <span id="p1-status">步兵</span></div>
+<div id="ui-center"><div class="score" id="score-display">0</div><div id="enemy-count"></div></div>
+<div class="ui-panel ui-p2"><div class="label">P2 战士</div>HP<div class="bar-bg"><div id="p2-hp-bar" class="bar-fill bar-hp" style="width:100%"></div></div>手雷:<span id="p2-nade">5</span> | <span id="p2-status">步兵</span></div>
+</div>
+<div id="msg-overlay"></div>
+</div>
+<script>
+"use strict";
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const W=800,H=600;canvas.width=W;canvas.height=H;
+const TILE=32;const COLS=Math.ceil(W/TILE)+2;const ROWS=Math.ceil(H/TILE)+2;
+const keys={};
+document.addEventListener("keydown",e=>{keys[e.key]=true;e.preventDefault()});
+document.addEventListener("keyup",e=>{keys[e.key]=false;e.preventDefault()});
+
+// Simple PRNG for deterministic terrain
+let seed=42;
+function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff}
+function randInt(a,b){return Math.floor(rnd()*(b-a+1))+a}
+
+// Map tiles: 0=grass, 1=water, 2=tree, 3=wall, 4=road
+const map=[];
+const T_GRASS=0,T_WATER=1,T_TREE=2,T_WALL=3,T_ROAD=4;
+function genMap(){
+for(let y=0;y<ROWS;y++){map[y]=[];for(let x=0;x<COLS;x++){
+let t=T_GRASS;
+const rr=rnd();
+if(x<2||y<2||x>=COLS-2||y>=ROWS-2)t=T_WALL;
+else if(rr<0.08)t=T_WATER;
+else if(rr<0.14)t=T_TREE;
+else if(rr<0.16)t=T_WALL;
+map[y][x]=t;
+}}
+// Clear spawn areas
+for(let y=3;y<7;y++)for(let x=3;x<7;x++)map[y][x]=T_GRASS;
+for(let y=ROWS-7;y<ROWS-3;y++)for(let x=COLS-7;x<COLS-3;x++)map[y][x]=T_GRASS;
+// Some roads
+for(let x=5;x<COLS-5;x++){if(rnd()<0.6)map[Math.floor(ROWS/2)][x]=T_ROAD}
+for(let y=5;y<ROWS-5;y++){if(rnd()<0.6)map[y][Math.floor(COLS/2)]=T_ROAD}
+}genMap();
+
+// Camera
+let camX=0,camY=0;
+const MAP_W=COLS*TILE,MAP_H=ROWS*TILE;
+
+// Entities
+let bullets=[],grenades=[],particles=[],enemies=[],tanks_player=[],enemyTanks=[],bunkers=[];
+let score=0,gameOver=false,gameWin=false;
+
+// Player
+function createPlayer(id,cx,cy,color,ctrl){
+return{id,color,x:cx*TILE+TILE/2,y:cy*TILE+TILE/2,vx:0,vy:0,speed:2.5,hp:100,maxHp:100,
+grenades:5,maxGrenade:9,shootCD:0,shootRate:12,nadeCD:0,isInfantry:true,ridingTank:null,
+ctrl,inTank:null,respawnTimer:0,score:0,alive:true,dir:0};
+}
+const players=[
+createPlayer(1,4,5,"#4fc3f7",{up:"w",down:"s",left:"a",right:"d",shoot:"j",nade:"k",enter:"e"}),
+createPlayer(2,COLS-5,ROWS-6,"#ff8a65",{up:"ArrowUp",down:"ArrowDown",left:"ArrowLeft",right:"ArrowRight",shoot:"1",nade:"2",enter:"Shift"})
+];
+
+// Tank
+function createTank(x,y,isPlayer){
+return{x,y,hp:isPlayer?200:80,maxHp:isPlayer?200:80,fuel:100,maxFuel:100,
+rider:null,isPlayer,alive:true,dir:0,shootCD:0,shootRate:25,size:40};
+}
+tanks_player.push(createTank(6*TILE+TILE/2,8*TILE+TILE/2,true));
+tanks_player.push(createTank(10*TILE+TILE/2,10*TILE+TILE/2,true));
+
+// Bunkers
+for(let i=0;i<4;i++){
+let bx,by,ok=false;let tries=0;
+while(!ok&&tries<30){
+bx=randInt(8,COLS-9);by=randInt(8,ROWS-9);
+if(map[by][bx]===T_GRASS||map[by][bx]===T_ROAD)ok=true;
+tries++;
+}
+if(ok)bunkers.push({x:bx*TILE+TILE/2,y:by*TILE+TILE/2,hp:150,maxHp:150,shootCD:0,shootRate:40,alive:true,size:36});
+}
+
+// Enemy infantry
+function createEnemy(x,y){
+return{x,y,hp:40,maxHp:40,speed:1.2,shootCD:0,shootRate:30,alive:true,dir:0,type:"infantry",size:20};
+}
+function createEnemyTank(x,y){
+return{x,y,hp:100,maxHp:100,speed:0.8,shootCD:0,shootRate:35,alive:true,dir:0,type:"tank",size:40};
+}
+function spawnEnemies(){
+enemies=[];enemyTanks=[];
+for(let i=0;i<10;i++){
+let ex=randInt(10,COLS-11)*TILE+TILE/2,ey=randInt(10,ROWS-11)*TILE+TILE/2;
+enemies.push(createEnemy(ex,ey));
+}
+for(let i=0;i<3;i++){
+let ex=randInt(8,COLS-9)*TILE+TILE/2,ey=randInt(8,ROWS-9)*TILE+TILE/2;
+enemyTanks.push(createEnemyTank(ex,ey));
+}
+}spawnEnemies();
+
+// Collision with map solids
+function isSolid(tx,ty){
+const col=Math.floor(tx/TILE),row=Math.floor(ty/TILE);
+if(col<0||row<0||col>=COLS||row>=ROWS)return true;
+const t=map[row][col];
+return t===T_WATER||t===T_WALL||t===T_TREE;
+}
+
+function moveEntity(e,w,h){
+let nx=e.x+e.vx,ny=e.y+e.vy;
+const hw=w/2,hh=h/2;
+if(!isSolid(nx-hw,ny-hh)&&!isSolid(nx+hw,ny-hh)&&!isSolid(nx-hw,ny+hh)&&!isSolid(nx+hw,ny+hh)){
+e.x=nx;e.y=ny;
+}else{
+if(!isSolid(nx-hw,e.y-hh)&&!isSolid(nx+hw,e.y-hh)&&!isSolid(nx-hw,e.y+hh)&&!isSolid(nx+hw,e.y+hh))e.x=nx;
+if(!isSolid(e.x-hw,ny-hh)&&!isSolid(e.x+hw,ny-hh)&&!isSolid(e.x-hw,ny+hh)&&!isSolid(e.x+hw,ny+hh))e.y=ny;
+}
+e.x=Math.max(hw,Math.min(MAP_W-hw,e.x));
+e.y=Math.max(hh,Math.min(MAP_H-hh,e.y));
+}
+
+// Particles
+function spawnParticles(x,y,color,count){
+for(let i=0;i<count;i++){
+const a=rnd()*Math.PI*2,s=rnd()*3+1;
+particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:20+randInt(0,15),maxLife:35,color});
+}
+}
+
+// Bullet
+function spawnBullet(x,y,dx,dy,isPlayer){
+bullets.push({x,y,dx,dy,speed:6,damage:isPlayer?25:10,isPlayer,life:80});
+}
+
+// Input handling
+function handleInput(p){
+if(!p.alive){
+if(p.respawnTimer>0)p.respawnTimer--;
+else{p.alive=true;p.hp=p.maxHp;p.x=p.id===1?(4*TILE+TILE/2):((COLS-5)*TILE+TILE/2);p.y=p.id===1?(5*TILE+TILE/2):((ROWS-6)*TILE+TILE/2);p.inTank=null;p.isInfantry=true;}
+return;
+}
+if(p.inTank){handleTankInput(p);return;}
+// Infantry movement
+p.vx=0;p.vy=0;
+let mx=0,my=0;
+if(keys[p.ctrl.up])my=-1;
+if(keys[p.ctrl.down])my=1;
+if(keys[p.ctrl.left])mx=-1;
+if(keys[p.ctrl.right])mx=1;
+if(mx!==0||my!==0){
+const len=Math.sqrt(mx*mx+my*my);
+p.vx=(mx/len)*p.speed;p.vy=(my/len)*p.speed;
+p.dir=Math.atan2(my,mx);
+}
+moveEntity(p,20,20);
+// Shooting
+if(p.shootCD>0)p.shootCD--;
+if(keys[p.ctrl.shoot]&&p.shootCD<=0){
+p.shootCD=p.shootRate;
+const dx=Math.cos(p.dir)*8,dy=Math.sin(p.dir)*8;
+spawnBullet(p.x+dx,p.y+dy,Math.cos(p.dir),Math.sin(p.dir),true);
+}
+// Grenade
+if(p.nadeCD>0)p.nadeCD--;
+if(keys[p.ctrl.nade]&&p.nadeCD<=0&&p.grenades>0){
+p.nadeCD=40;p.grenades--;
+grenades.push({x:p.x,y:p.y,dx:Math.cos(p.dir)*4,dy:Math.sin(p.dir)*4,timer:45,damage:80,radius:60,isPlayer:true});
+}
+// Enter tank
+if(keys[p.ctrl.enter]){
+for(let tk of tanks_player){
+if(!tk.alive||tk.rider)continue;
+const dx=p.x-tk.x,dy=p.y-tk.y;
+if(Math.sqrt(dx*dx+dy*dy)<tk.size/2+16){
+p.inTank=tk;tk.rider=p;p.isInfantry=false;
+keys[p.ctrl.enter]=false;
+break;
+}
+}
+}
+}
+
+function handleTankInput(p){
+const tk=p.inTank;
+if(!tk||!tk.alive){p.inTank=null;p.isInfantry=true;return;}
+tk.dir=p.dir;
+let mx=0,my=0;
+if(keys[p.ctrl.up])my=-1;
+if(keys[p.ctrl.down])my=1;
+if(keys[p.ctrl.left])mx=-1;
+if(keys[p.ctrl.right])mx=1;
+if(mx!==0||my!==0){const len=Math.sqrt(mx*mx+my*my);p.dir=Math.atan2(my,mx)}
+tk.x+=mx*1.8;tk.y+=my*1.8;
+if(mx!==0||my!==0)tk.fuel-=0.08;
+moveEntityTank(tk);
+if(tk.fuel<=0){tk.alive=false;spawnParticles(tk.x,tk.y,"#f90",25);p.inTank=null;p.isInfantry=true;return;}
+// Tank shoot
+if(tk.shootCD>0)tk.shootCD--;
+if(keys[p.ctrl.shoot]&&tk.shootCD<=0){
+tk.shootCD=tk.shootRate;
+spawnBullet(tk.x+Math.cos(p.dir)*22,tk.y+Math.sin(p.dir)*22,Math.cos(p.dir),Math.sin(p.dir),true);
+}
+// Exit tank
+if(keys[p.ctrl.enter]){
+p.inTank=null;tk.rider=null;p.isInfantry=true;
+p.x=tk.x+Math.cos(p.dir+1.5)*30;p.y=tk.y+Math.sin(p.dir+1.5)*30;
+keys[p.ctrl.enter]=false;
+}
+}
+
+function moveEntityTank(tk){
+const hw=20,hh=20;
+if(!isSolid(tk.x-hw,tk.y-hh)&&!isSolid(tk.x+hw,tk.y-hh)&&!isSolid(tk.x-hw,tk.y+hh)&&!isSolid(tk.x+hw,tk.y+hh))return;
+tk.x-=tk.x>MAP_W/2?-2:2;tk.y-=tk.y>MAP_H/2?-2:2;
+tk.x=Math.max(hw,Math.min(MAP_W-hw,tk.x));
+tk.y=Math.max(hh,Math.min(MAP_H-hh,tk.y));
+}
+
+// Enemy AI
+function updateEnemyAI(e){
+if(!e.alive)return;
+// Find nearest player
+let nearest=null,minD=Infinity;
+for(let p of players){
+if(!p.alive)continue;
+const dx=p.x-e.x,dy=p.y-e.y,d=Math.sqrt(dx*dx+dy*dy);
+if(d<minD){minD=d;nearest=p;}
+}
+if(!nearest)return;
+if(minD<400){
+const dx=nearest.x-e.x,dy=nearest.y-e.y,dist=Math.sqrt(dx*dx+dy*dy);
+const ndx=dx/dist,ndy=dy/dist;
+e.dir=Math.atan2(dy,dx);
+if(dist>e.size/2+16){
+e.x+=ndx*e.speed;e.y+=ndy*e.speed;
+if(e.type==="tank"){moveEntityTank(e)}else{moveEntity(e,e.size,e.size)}
+}
+if(e.shootCD>0)e.shootCD--;
+if(e.shootCD<=0&&dist<350){
+e.shootCD=e.shootRate;
+spawnBullet(e.x+ndx*14,e.y+ndy*14,ndx,ndy,false);
+}
+}
+}
+
+// Bunker AI
+function updateBunker(b){
+if(!b.alive)return;
+let nearest=null,minD=Infinity;
+for(let p of players){
+if(!p.alive)continue;
+const d=Math.hypot(p.x-b.x,p.y-b.y);
+if(d<minD){minD=d;nearest=p;}
+}
+if(nearest&&minD<350){
+if(b.shootCD>0)b.shootCD--;
+if(b.shootCD<=0){
+b.shootCD=b.shootRate;
+const dx=nearest.x-b.x,dy=nearest.y-b.y,dist=Math.hypot(dx,dy);
+spawnBullet(b.x+dx/dist*22,b.y+dy/dist*22,dx/dist,dy/dist,false);
+}
+}
+}
+
+// Update
+function update(){
+if(gameOver||gameWin)return;
+// Players
+for(let p of players)handleInput(p);
+// Enemies
+for(let e of enemies)updateEnemyAI(e);
+for(let et of enemyTanks)updateEnemyAI(et);
+for(let b of bunkers)updateBunker(b);
+// Bullets
+for(let i=bullets.length-1;i>=0;i--){
+const b=bullets[i];b.x+=b.dx*b.speed;b.y+=b.dy*b.speed;b.life--;
+if(b.life<=0||b.x<0||b.y<0||b.x>MAP_W||b.y>MAP_H||isSolid(b.x,b.y)){bullets.splice(i,1);continue}
+if(b.isPlayer){
+for(let e of enemies){
+if(!e.alive)continue;
+if(Math.hypot(b.x-e.x,b.y-e.y)<e.size/2+3){e.hp-=b.damage;bullets.splice(i,1);spawnParticles(b.x,b.y,"#fff",4);
+if(e.hp<=0){e.alive=false;score+=100;spawnParticles(e.x,e.y,"#f44",12)}break}
+}
+if(i<0)continue;
+for(let et of enemyTanks){
+if(!et.alive)continue;
+if(Math.hypot(b.x-et.x,b.y-et.y)<et.size/2+3){et.hp-=b.damage;bullets.splice(i,1);spawnParticles(b.x,b.y,"#ff0",5);
+if(et.hp<=0){et.alive=false;score+=300;spawnParticles(et.x,et.y,"#fa0",20)}break}
+}
+if(i<0)continue;
+for(let bk of bunkers){
+if(!bk.alive)continue;
+if(Math.hypot(b.x-bk.x,b.y-bk.y)<bk.size/2+4){bk.hp-=b.damage;bullets.splice(i,1);spawnParticles(b.x,b.y,"#ccc",5);
+if(bk.hp<=0){bk.alive=false;score+=500;spawnParticles(bk.x,bk.y,"#ff0",25)}break}
+}
+}else{
+for(let p of players){
+if(!p.alive)continue;
+const cx=p.inTank?p.inTank.x:p.x,cy=p.inTank?p.inTank.y:p.y;
+const sz=p.inTank?20:10;
+if(Math.hypot(b.x-cx,b.y-cy)<sz+3){
+bullets.splice(i,1);spawnParticles(b.x,b.y,"#f44",3);
+if(p.inTank){p.inTank.hp-=b.damage;if(p.inTank.hp<=0){p.inTank.alive=false;spawnParticles(p.inTank.x,p.inTank.y,"#f90",20);p.inTank=null;p.isInfantry=true}}
+else{p.hp-=b.damage;if(p.hp<=0){p.alive=false;p.respawnTimer=90;spawnParticles(p.x,p.y,"#f00",15);p.inTank=null;p.isInfantry=true}}
+break;
+}
+}
+}
+}
+// Grenades
+for(let i=grenades.length-1;i>=0;i--){
+const g=grenades[i];g.x+=g.dx;g.y+=g.dy;g.timer--;
+if(g.timer<=0){
+// Explode
+spawnParticles(g.x,g.y,"#fa0",30);
+if(g.isPlayer){
+for(let e of enemies){if(e.alive&&Math.hypot(g.x-e.x,g.y-e.y)<g.radius){e.hp-=g.damage;if(e.hp<=0){e.alive=false;score+=100;spawnParticles(e.x,e.y,"#f44",10)}}}
+for(let et of enemyTanks){if(et.alive&&Math.hypot(g.x-et.x,g.y-et.y)<g.radius){et.hp-=g.damage;if(et.hp<=0){et.alive=false;score+=300;spawnParticles(et.x,et.y,"#fa0",18)}}}
+for(let bk of bunkers){if(bk.alive&&Math.hypot(g.x-bk.x,g.y-bk.y)<g.radius){bk.hp-=g.damage;if(bk.hp<=0){bk.alive=false;score+=500;spawnParticles(bk.x,bk.y,"#ff0",25)}}}
+}
+grenades.splice(i,1);
+}
+}
+// Particles
+for(let i=particles.length-1;i>=0;i--){particles[i].life--;particles[i].x+=particles[i].vx;particles[i].y+=particles[i].vy;if(particles[i].life<=0)particles.splice(i,1)}
+// Win check - all bunkers destroyed
+const allBunkersDead=bunkers.every(b=>!b.alive);
+const allEnemiesDead=enemies.every(e=>!e.alive)&&enemyTanks.every(e=>!e.alive);
+if(allBunkersDead&&allEnemiesDead&&!gameWin){gameWin=true;showMsg("胜利！敌方基地已摧毁！",300)}
+// Lose check
+const allDead=players.every(p=>!p.alive&&p.respawnTimer>0);
+if(allDead&&!gameOver){gameOver=true;showMsg("全军覆没！游戏结束",300)}
+}
+
+// Camera
+function updateCamera(){
+let cx=0,cy=0,count=0;
+for(let p of players){if(p.alive){cx+=p.inTank?p.inTank.x:p.x;cy+=p.inTank?p.inTank.y:p.y;count++}}
+if(count>0){cx/=count;cy/=count}
+camX=cx-W/2;camY=cy-H/2;
+camX=Math.max(0,Math.min(MAP_W-W,camX));
+camY=Math.max(0,Math.min(MAP_H-H,camY));
+}
+
+// Render
+const terrainColors={[T_GRASS]:"#4a6b2a",[T_WATER]:"#1a4a6b",[T_TREE]:"#2d5a1e",[T_WALL]:"#5a5a5a",[T_ROAD]:"#8a7a5a"};
+
+function drawMap(){
+const startCol=Math.floor(camX/TILE),startRow=Math.floor(camY/TILE);
+const endCol=startCol+Math.ceil(W/TILE)+1,endRow=startRow+Math.ceil(H/TILE)+1;
+for(let row=startRow;row<=endRow;row++){for(let col=startCol;col<=endCol;col++){
+if(row<0||col<0||row>=ROWS||col>=COLS)continue;
+const sx=col*TILE-camX,sy=row*TILE-camY;
+ctx.fillStyle=terrainColors[map[row][col]]||"#333";
+ctx.fillRect(sx,sy,TILE,TILE);
+// Pixel style grid
+ctx.strokeStyle="rgba(0,0,0,0.08)";ctx.strokeRect(sx,sy,TILE,TILE);
+}}
+}
+
+function drawPlayer(p){
+if(!p.alive)return;
+const cx=p.inTank?p.inTank.x:p.x,cy=p.inTank?p.inTank.y:p.y;
+const sx=cx-camX,sy=cy-camY;
+if(p.inTank){drawTank(p.inTank,sx,sy,true,p.color);return}
+// Infantry
+ctx.save();ctx.translate(sx,sy);ctx.rotate(p.dir);
+ctx.fillStyle=p.color;
+ctx.fillRect(-6,-8,12,16);
+ctx.fillStyle="#fdd";ctx.fillRect(-2,-12,4,4);
+// Gun
+ctx.fillStyle="#888";ctx.fillRect(6,-3,10,3);
+ctx.restore();
+}
+
+function drawTank(tk,sx,sy,isPlayer,color){
+ctx.save();ctx.translate(sx,sy);ctx.rotate(tk.dir);
+ctx.fillStyle=isPlayer?color:"#c0392b";
+ctx.fillRect(-20,-16,40,32);
+ctx.fillStyle="#555";ctx.fillRect(-22,-12,44,24);
+ctx.fillStyle="#333";ctx.fillRect(14,-18,16,8);
+ctx.fillStyle="#666";ctx.fillRect(-8,-22,4,8);
+if(isPlayer&&tk.rider){
+ctx.fillStyle=tk.rider.color;ctx.fillRect(-5,-26,10,12);
+ctx.fillStyle="#fdd";ctx.fillRect(-2,-30,4,4);
+}
+ctx.restore();
+// Fuel bar
+if(isPlayer){
+const fuelPct=tk.fuel/tk.maxFuel;
+ctx.fillStyle="#333";ctx.fillRect(sx-15,sy+22,30,4);
+ctx.fillStyle=fuelPct>0.3?"#f39c12":"#e74c3c";ctx.fillRect(sx-15,sy+22,30*fuelPct,4);
+}
+}
+
+function drawEnemy(e){
+if(!e.alive)return;
+const sx=e.x-camX,sy=e.y-camY;
+if(e.type==="tank"){drawTank(e,sx,sy,false);return}
+ctx.save();ctx.translate(sx,sy);ctx.rotate(e.dir);
+ctx.fillStyle="#c0392b";ctx.fillRect(-6,-8,12,16);
+ctx.fillStyle="#fdd";ctx.fillRect(-2,-12,4,4);
+ctx.fillStyle="#555";ctx.fillRect(6,-3,8,3);
+ctx.restore();
+}
+
+function drawBunker(b){
+if(!b.alive)return;
+const sx=b.x-camX,sy=b.y-camY;
+ctx.fillStyle="#666";ctx.fillRect(sx-18,sy-18,36,36);
+ctx.fillStyle="#444";ctx.fillRect(sx-12,sy-12,24,24);
+ctx.fillStyle="#888";ctx.fillRect(sx-14,sy-10,8,8);
+const hpPct=b.hp/b.maxHp;
+ctx.fillStyle="#333";ctx.fillRect(sx-15,sy+22,30,4);
+ctx.fillStyle="#e74c3c";ctx.fillRect(sx-15,sy+22,30*hpPct,4);
+}
+
+function drawBullets(){
+for(let b of bullets){
+const sx=b.x-camX,sy=b.y-camY;
+if(sx<-10||sy<-10||sx>W+10||sy>H+10)continue;
+ctx.fillStyle=b.isPlayer?"#ff0":"#f44";
+ctx.fillRect(sx-3,sy-3,6,6);
+ctx.fillStyle="#fff";ctx.fillRect(sx-1,sy-1,2,2);
+}
+}
+
+function drawGrenades(){
+for(let g of grenades){
+const sx=g.x-camX,sy=g.y-camY;
+ctx.fillStyle="#333";ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle="#5a5";ctx.beginPath();ctx.arc(sx,sy,3,0,Math.PI*2);ctx.fill();
+}
+}
+
+function drawParticles(){
+for(let p of particles){
+const alpha=p.life/p.maxLife,sx=p.x-camX,sy=p.y-camY;
+ctx.globalAlpha=alpha;ctx.fillStyle=p.color;
+ctx.fillRect(sx-1.5,sy-1.5,3,3);
+}ctx.globalAlpha=1;
+}
+
+function drawHUD(){
+document.getElementById("p1-hp-bar").style.width=(players[0].hp/players[0].maxHp*100)+"%";
+document.getElementById("p2-hp-bar").style.width=(players[1].hp/players[1].maxHp*100)+"%";
+document.getElementById("p1-nade").textContent=players[0].grenades;
+document.getElementById("p2-nade").textContent=players[1].grenades;
+document.getElementById("p1-status").textContent=players[0].inTank?("坦克 "+Math.floor(players[0].inTank.fuel)):"步兵";
+document.getElementById("p2-status").textContent=players[1].inTank?("坦克 "+Math.floor(players[1].inTank.fuel)):"步兵";
+document.getElementById("score-display").textContent=score;
+const eCount=enemies.filter(e=>e.alive).length+enemyTanks.filter(e=>e.alive).length;
+const bCount=bunkers.filter(b=>b.alive).length;
+document.getElementById("enemy-count").textContent="敌军:"+eCount+" | 碉堡:"+bCount;
+}
+
+function showMsg(text,duration){
+const el=document.getElementById("msg-overlay");
+el.textContent=text;el.classList.add("show");
+setTimeout(()=>el.classList.remove("show"),duration);
+}
+
+function render(){
+ctx.fillStyle="#0a0a0a";ctx.fillRect(0,0,W,H);
+drawMap();
+for(let b of bunkers)drawBunker(b);
+for(let e of enemies)drawEnemy(e);
+for(let et of enemyTanks)drawEnemy(et);
+for(let p of players)drawPlayer(p);
+drawBullets();
+drawGrenades();
+drawParticles();
+drawHUD();
+}
+
+// Mini-map in corner
+function drawMinimap(){
+const mmW=100,mmH=75,mmX=W-mmW-10,mmY=H-mmH-10;
+ctx.fillStyle="rgba(0,0,0,0.6)";ctx.fillRect(mmX,mmY,mmW,mmH);
+ctx.strokeStyle="#555";ctx.strokeRect(mmX,mmY,mmW,mmH);
+const sx=mmW/MAP_W,sy=mmH/MAP_H;
+for(let row=0;row<ROWS;row++){for(let col=0;col<COLS;col++){
+ctx.fillStyle=terrainColors[map[row][col]]||"#333";
+ctx.fillRect(mmX+col*TILE*sx,mmY+row*TILE*sy,Math.ceil(TILE*sx),Math.ceil(TILE*sy));
+}}
+for(let p of players){if(p.alive){const cx=p.inTank?p.inTank.x:p.x;ctx.fillStyle=p.color;ctx.fillRect(mmX+cx*sx-1,mmY+(p.inTank?p.inTank.y:p.y)*sy-1,2,2)}}
+for(let e of enemies){if(e.alive){ctx.fillStyle="#f44";ctx.fillRect(mmX+e.x*sx,mmY+e.y*sy,1,1)}}
+for(let et of enemyTanks){if(et.alive){ctx.fillStyle="#f90";ctx.fillRect(mmX+et.x*sx-1,mmY+et.y*sy-1,2,2)}}
+for(let b of bunkers){if(b.alive){ctx.fillStyle="#fff";ctx.fillRect(mmX+b.x*sx-2,mmY+b.y*sy-2,3,3)}}
+// Camera rect
+ctx.strokeStyle="#fff";ctx.strokeRect(mmX+camX*sx,mmY+camY*sy,W*sx,H*sy);
+}
+
+// Game loop
+function gameLoop(){
+update();updateCamera();
+render();drawMinimap();
+requestAnimationFrame(gameLoop);
+}
+
+// Instruction overlay
+const instDiv=document.createElement("div");
+instDiv.style.cssText="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:#aaa;font-size:10px;text-align:center;pointer-events:none;background:rgba(0,0,0,0.7);padding:3px 8px;border-radius:3px";
+instDiv.innerHTML="P1: WASD移动 J射击 K手雷 E上车/下车 | P2: 方向键移动 1射击 2手雷 Shift上车/下车";
+document.getElementById("game-wrapper").appendChild(instDiv);
+
+gameLoop();
+</script>
+</body>
+</html>
